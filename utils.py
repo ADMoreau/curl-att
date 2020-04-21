@@ -1,13 +1,12 @@
 import torch
 import numpy as np
-import torch.nn as nn
 import gym
 import os
 from collections import deque
 import random
-from torch.utils.data import Dataset, DataLoader
-import time
+from torch.utils.data import Dataset
 from skimage.util.shape import view_as_windows
+
 
 class eval_mode(object):
     def __init__(self, *models):
@@ -88,9 +87,6 @@ class ReplayBuffer(Dataset):
         self.last_save = 0
         self.full = False
 
-
-    
-
     def add(self, obs, action, reward, next_obs, done):
        
         np.copyto(self.obses[self.idx], obs)
@@ -120,9 +116,7 @@ class ReplayBuffer(Dataset):
         not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
         return obses, actions, rewards, next_obses, not_dones
 
-    def sample_cpc(self):
-
-        start = time.time()
+    def sample_cpc(self, att_encoder=False):
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx, size=self.batch_size
         )
@@ -131,10 +125,11 @@ class ReplayBuffer(Dataset):
         next_obses = self.next_obses[idxs]
         pos = obses.copy()
 
-        obses = random_crop(obses, self.image_size)
-        next_obses = random_crop(next_obses, self.image_size)
-        pos = random_crop(pos, self.image_size)
-    
+        if att_encoder == False:
+            obses = random_crop(obses, self.image_size)
+            next_obses = random_crop(next_obses, self.image_size)
+            pos = random_crop(pos, self.image_size)
+
         obses = torch.as_tensor(obses, device=self.device).float()
         next_obses = torch.as_tensor(
             next_obses, device=self.device
@@ -249,6 +244,7 @@ def random_crop(imgs, output_size):
     # selects a random window for each batch element
     cropped_imgs = windows[np.arange(n), w1, h1]
     return cropped_imgs
+
 
 def center_crop_image(image, output_size):
     h, w = image.shape[1:]

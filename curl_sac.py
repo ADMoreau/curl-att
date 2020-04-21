@@ -2,9 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import copy
-import math
-
 import utils
 from encoder import make_encoder
 
@@ -48,9 +45,13 @@ class Actor(nn.Module):
     """MLP actor network."""
     def __init__(
         self, obs_shape, action_shape, hidden_dim, encoder_type,
-        encoder_feature_dim, log_std_min, log_std_max, num_layers, num_filters
+        encoder_feature_dim, log_std_min, log_std_max, num_layers, num_filters,
+            att_encoder_bool=False, contrast=False
     ):
         super().__init__()
+
+        if att_encoder_bool:
+            self.att_encoder = Self_Attn(obs_shape[0], contrast)
 
         self.encoder = make_encoder(
             encoder_type, obs_shape, encoder_feature_dim, num_layers,
@@ -72,6 +73,8 @@ class Actor(nn.Module):
     def forward(
         self, obs, compute_pi=True, compute_log_pi=True, detach_encoder=False
     ):
+        if self.att_encoder is not None:
+            obs = self.att_encoder(obs)
         obs = self.encoder(obs, detach=detach_encoder)
 
         mu, log_std = self.trunk(obs).chunk(2, dim=-1)
@@ -136,10 +139,12 @@ class Critic(nn.Module):
     """Critic network, employes two q-functions."""
     def __init__(
         self, obs_shape, action_shape, hidden_dim, encoder_type,
-        encoder_feature_dim, num_layers, num_filters
+        encoder_feature_dim, num_layers, num_filters, att_encoder_bool=False, contrast=False
     ):
         super().__init__()
 
+        if att_encoder_bool:
+            self.att_encoder = Self_Attn(obs_shape[0], contrast)
 
         self.encoder = make_encoder(
             encoder_type, obs_shape, encoder_feature_dim, num_layers,
@@ -157,6 +162,8 @@ class Critic(nn.Module):
         self.apply(weight_init)
 
     def forward(self, obs, action, detach_encoder=False):
+        if self.att_encoder is not None:
+            obs = self.att_encoder(obs)
         # detach_encoder allows to stop gradient propogation to encoder
         obs = self.encoder(obs, detach=detach_encoder)
 
@@ -182,17 +189,63 @@ class Critic(nn.Module):
             L.log_param('train_critic/q2_fc%d' % i, self.Q2.trunk[i * 2], step)
 
 
+class Self_Attn(nn.Module):
+    """
+    SAGAN Self attention Layer
+    Implementation from https://github.com/heykeetae/Self-Attention-GAN/blob/master/sagan_models.py
+    """
+
+    def __init__(self, in_dim, contrast=False):
+        super(Self_Attn, self).__init__()
+        self.chanel_in = in_dim
+        self.contrast = contrast
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+        self.softmax = nn.Softmax(dim=-1)  #
+
+    def forward(self, x):
+        """
+            inputs :
+                x : input feature maps( B X C X W X H)
+            returns :
+                out : self attention value + input feature
+                attention: B X N X N (N is Width*Height)
+        """
+        m_batchsize, C, width, height = x.size()
+        proj_query = self.query_conv(x).view(m_batchsize, -1, width * height).permute(0, 2, 1)  # B X C X (N)
+        proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)  # B X C x (*W*H)
+        energy = torch.bmm(proj_query, proj_key)  # transpose check
+        attention = self.softmax(energy)  # B X (N) X (N)
+        if self.contrast == True:
+            #get the opposite of the softmax activation, i.e. .1 -> .9
+            attention = torch.mul(attention, -1)
+            attention = torch.add(attention, 1)
+        proj_value = self.value_conv(x).view(m_batchsize, -1, width * height)  # B X C X N
+
+        out = torch.bmm(proj_value, attention.permute(0, 2, 1))
+        out = out.view(m_batchsize, C, width, height)
+
+        out = self.gamma * out + x
+        return out, attention
+
+
 class CURL(nn.Module):
     """
     CURL
     """
 
-    def __init__(self, obs_shape, z_dim, batch_size, critic, critic_target, output_type="continuous"):
+    def __init__(self, obs_shape, z_dim, batch_size, critic, critic_target, output_type="continuous",
+                 attention_encoder=False
+                 ):
         super(CURL, self).__init__()
         self.batch_size = batch_size
-
+        if attention_encoder:
+            self.encoder_att = critic.att_encoder
+            self.encoder_target_att = critic_target.att_encoder
         self.encoder = critic.encoder
-
         self.encoder_target = critic_target.encoder 
 
         self.W = nn.Parameter(torch.rand(z_dim, z_dim))
@@ -206,8 +259,12 @@ class CURL(nn.Module):
         """
         if ema:
             with torch.no_grad():
+                if self.encoder_target_att is not None:
+                    x = self.encoder_target_att(x)
                 z_out = self.encoder_target(x)
         else:
+            if self.encoder_att is not None:
+                x = self.encoder_att(x)
             z_out = self.encoder(x)
 
         if detach:
@@ -257,7 +314,8 @@ class CurlSacAgent(object):
         cpc_update_freq=1,
         log_interval=100,
         detach_encoder=False,
-        curl_latent_dim=128
+        curl_latent_dim=128,
+        attention_encoder=True
     ):
         self.device = device
         self.discount = discount
@@ -271,21 +329,22 @@ class CurlSacAgent(object):
         self.curl_latent_dim = curl_latent_dim
         self.detach_encoder = detach_encoder
         self.encoder_type = encoder_type
+        self.attention_encoder = attention_encoder
 
         self.actor = Actor(
             obs_shape, action_shape, hidden_dim, encoder_type,
             encoder_feature_dim, actor_log_std_min, actor_log_std_max,
-            num_layers, num_filters
+            num_layers, num_filters, att_encoder_bool=attention_encoder
         ).to(device)
 
         self.critic = Critic(
             obs_shape, action_shape, hidden_dim, encoder_type,
-            encoder_feature_dim, num_layers, num_filters
+            encoder_feature_dim, num_layers, num_filters, att_encoder_bool=attention_encoder
         ).to(device)
 
         self.critic_target = Critic(
             obs_shape, action_shape, hidden_dim, encoder_type,
-            encoder_feature_dim, num_layers, num_filters
+            encoder_feature_dim, num_layers, num_filters, att_encoder_bool=attention_encoder, contrast=True
         ).to(device)
 
         self.critic_target.load_state_dict(self.critic.state_dict())
@@ -314,7 +373,8 @@ class CurlSacAgent(object):
         if self.encoder_type == 'pixel':
             # create CURL encoder (the 128 batch size is probably unnecessary)
             self.CURL = CURL(obs_shape, encoder_feature_dim,
-                        self.curl_latent_dim, self.critic,self.critic_target, output_type='continuous').to(self.device)
+                        self.curl_latent_dim, self.critic,self.critic_target, output_type='continuous',
+                             attention_encoder=attention_encoder).to(self.device)
 
             # optimizer for critic encoder for reconstruction loss
             self.encoder_optimizer = torch.optim.Adam(
@@ -350,7 +410,7 @@ class CurlSacAgent(object):
             return mu.cpu().data.numpy().flatten()
 
     def sample_action(self, obs):
-        if obs.shape[-1] != self.image_size:
+        if obs.shape[-1] != self.image_size and self.attention_encoder==False:
             obs = utils.center_crop_image(obs, self.image_size)
  
         with torch.no_grad():
@@ -363,18 +423,15 @@ class CurlSacAgent(object):
         with torch.no_grad():
             _, policy_action, log_pi, _ = self.actor(next_obs)
             target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
-            target_V = torch.min(target_Q1,
-                                 target_Q2) - self.alpha.detach() * log_pi
+            target_V = torch.min(target_Q1, target_Q2) - self.alpha.detach() * log_pi
             target_Q = reward + (not_done * self.discount * target_V)
 
         # get current Q estimates
         current_Q1, current_Q2 = self.critic(
             obs, action, detach_encoder=self.detach_encoder)
-        critic_loss = F.mse_loss(current_Q1,
-                                 target_Q) + F.mse_loss(current_Q2, target_Q)
+        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
         if step % self.log_interval == 0:
             L.log('train_critic/loss', critic_loss, step)
-
 
         # Optimize the critic
         self.critic_optimizer.zero_grad()
@@ -415,7 +472,7 @@ class CurlSacAgent(object):
         alpha_loss.backward()
         self.log_alpha_optimizer.step()
 
-    def update_cpc(self, obs_anchor, obs_pos, cpc_kwargs, L, step):
+    def update_cpc(self, obs_anchor, obs_pos, L, step):
         
         z_a = self.CURL.encode(obs_anchor)
         z_pos = self.CURL.encode(obs_pos, ema=True)
@@ -433,10 +490,9 @@ class CurlSacAgent(object):
         if step % self.log_interval == 0:
             L.log('train/curl_loss', loss, step)
 
-
     def update(self, replay_buffer, L, step):
         if self.encoder_type == 'pixel':
-            obs, action, reward, next_obs, not_done, cpc_kwargs = replay_buffer.sample_cpc()
+            obs, action, reward, next_obs, not_done, cpc_kwargs = replay_buffer.sample_cpc(self.att_encoder)
         else:
             obs, action, reward, next_obs, not_done = replay_buffer.sample_proprio()
     
@@ -462,7 +518,7 @@ class CurlSacAgent(object):
         
         if step % self.cpc_update_freq == 0 and self.encoder_type == 'pixel':
             obs_anchor, obs_pos = cpc_kwargs["obs_anchor"], cpc_kwargs["obs_pos"]
-            self.update_cpc(obs_anchor, obs_pos,cpc_kwargs, L, step)
+            self.update_cpc(obs_anchor, obs_pos, cpc_kwargs, L, step)
 
     def save(self, model_dir, step):
         torch.save(
@@ -475,6 +531,11 @@ class CurlSacAgent(object):
     def save_curl(self, model_dir, step):
         torch.save(
             self.CURL.state_dict(), '%s/curl_%s.pt' % (model_dir, step)
+        )
+
+    def save_attention_encoder(self, model_dir, step):
+        torch.save(
+            self.att_encoder.state_dict(), '%s/att_encoder_%s.pt' % (model_dir, step)
         )
 
     def load(self, model_dir, step):

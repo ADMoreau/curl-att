@@ -2,21 +2,15 @@ import numpy as np
 import torch
 import argparse
 import os
-import math
-import gym
-import sys
-import random
 import time
 import json
 import dmc2gym
-import copy
 
 import utils
 from logger import Logger
 from video import VideoRecorder
 
 from curl_sac import CurlSacAgent
-from torchvision import transforms
 
 
 def parse_args():
@@ -25,7 +19,7 @@ def parse_args():
     parser.add_argument('--domain_name', default='cheetah')
     parser.add_argument('--task_name', default='run')
     parser.add_argument('--pre_transform_image_size', default=100, type=int)
-
+    parser.add_argument('--attention encoder', default=True, type=bool)
     parser.add_argument('--image_size', default=84, type=int)
     parser.add_argument('--action_repeat', default=1, type=int)
     parser.add_argument('--frame_stack', default=3, type=int)
@@ -144,11 +138,12 @@ def make_agent(obs_shape, action_shape, args, device):
             num_filters=args.num_filters,
             log_interval=args.log_interval,
             detach_encoder=args.detach_encoder,
-            curl_latent_dim=args.curl_latent_dim
-
+            curl_latent_dim=args.curl_latent_dim,
+            attention_encoder=args.attention_encoder
         )
     else:
         assert 'agent is not supported: %s' % args.agent
+
 
 def main():
     args = parse_args()
@@ -227,7 +222,7 @@ def main():
 
         if step % args.eval_freq == 0:
             L.log('eval/episode', episode, step)
-            evaluate(env, agent, video, args.num_eval_episodes, L, step,args)
+            evaluate(env, agent, video, args.num_eval_episodes, L, step, args)
             if args.save_model:
                 agent.save_curl(model_dir, step)
             if args.save_buffer:
@@ -256,12 +251,8 @@ def main():
         else:
             with utils.eval_mode(agent):
                 action = agent.sample_action(obs)
-
-        # run training update
-        if step >= args.init_steps:
-            num_updates = 1 
-            for _ in range(num_updates):
-                agent.update(replay_buffer, L, step)
+            # run training update
+            agent.update(replay_buffer, L, step)
 
         next_obs, reward, done, _ = env.step(action)
 
