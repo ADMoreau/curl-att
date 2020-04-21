@@ -203,6 +203,7 @@ def main():
         batch_size=args.batch_size,
         device=device,
         image_size=args.image_size,
+        attention_encoder = args.attention_encoder
     )
 
     agent = make_agent(

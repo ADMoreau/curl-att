@@ -195,10 +195,9 @@ class Self_Attn(nn.Module):
     Implementation from https://github.com/heykeetae/Self-Attention-GAN/blob/master/sagan_models.py
     """
 
-    def __init__(self, in_dim, contrast=False):
+    def __init__(self, in_dim):
         super(Self_Attn, self).__init__()
         self.chanel_in = in_dim
-        self.contrast = contrast
         self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
         self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
         self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
@@ -206,7 +205,7 @@ class Self_Attn(nn.Module):
 
         self.softmax = nn.Softmax(dim=-1)  #
 
-    def forward(self, x):
+    def forward(self, x, contrast=False):
         """
             inputs :
                 x : input feature maps( B X C X W X H)
@@ -219,7 +218,7 @@ class Self_Attn(nn.Module):
         proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)  # B X C x (*W*H)
         energy = torch.bmm(proj_query, proj_key)  # transpose check
         attention = self.softmax(energy)  # B X (N) X (N)
-        if self.contrast == True:
+        if contrast:
             #get the opposite of the softmax activation, i.e. .1 -> .9
             attention = torch.mul(attention, -1)
             attention = torch.add(attention, 1)
@@ -260,7 +259,7 @@ class CURL(nn.Module):
         if ema:
             with torch.no_grad():
                 if self.encoder_target_att is not None:
-                    x = self.encoder_target_att(x)
+                    x = self.encoder_target_att(x, contrast=True)
                 z_out = self.encoder_target(x)
         else:
             if self.encoder_att is not None:
@@ -283,6 +282,7 @@ class CURL(nn.Module):
         logits = torch.matmul(z_a, Wz)  # (B,B)
         logits = logits - torch.max(logits, 1)[0][:, None]
         return logits
+
 
 class CurlSacAgent(object):
     """CURL representation learning with SAC."""
@@ -344,7 +344,7 @@ class CurlSacAgent(object):
 
         self.critic_target = Critic(
             obs_shape, action_shape, hidden_dim, encoder_type,
-            encoder_feature_dim, num_layers, num_filters, att_encoder_bool=attention_encoder, contrast=True
+            encoder_feature_dim, num_layers, num_filters, att_encoder_bool=attention_encoder
         ).to(device)
 
         self.critic_target.load_state_dict(self.critic.state_dict())
@@ -492,7 +492,7 @@ class CurlSacAgent(object):
 
     def update(self, replay_buffer, L, step):
         if self.encoder_type == 'pixel':
-            obs, action, reward, next_obs, not_done, cpc_kwargs = replay_buffer.sample_cpc(self.att_encoder)
+            obs, action, reward, next_obs, not_done, cpc_kwargs = replay_buffer.sample_cpc()
         else:
             obs, action, reward, next_obs, not_done = replay_buffer.sample_proprio()
     
