@@ -148,17 +148,10 @@ def make_agent(obs_shape, action_shape, args, device):
 def main():
     args = parse_args()
     if args.seed == -1: 
-        args.__dict__["seed"] = np.random.randint(1,1000000)
+        args.__dict__["seed"] = np.random.randint(1, 1000000)
     utils.set_seed_everywhere(args.seed)
     env = gym.make(
-        domain_name=args.domain_name,
-        task_name=args.task_name,
-        seed=args.seed,
-        visualize_reward=False,
-        from_pixels=(args.encoder_type == 'pixel'),
-        height=args.pre_transform_image_size,
-        width=args.pre_transform_image_size,
-        frame_skip=args.action_repeat
+        domain_name=args.domain_name
     )
  
     env.seed(args.seed)
