@@ -4,7 +4,7 @@ import argparse
 import os
 import time
 import json
-import dmc2gym
+import gym
 
 import utils
 from logger import Logger
@@ -16,8 +16,8 @@ from curl_sac import CurlSacAgent
 def parse_args():
     parser = argparse.ArgumentParser()
     # environment
-    parser.add_argument('--domain_name', default='cheetah')
-    parser.add_argument('--task_name', default='run')
+    parser.add_argument('--domain_name', default='cartpole')
+    parser.add_argument('--task_name', default='swingup')
     parser.add_argument('--pre_transform_image_size', default=100, type=int)
     parser.add_argument('--attention encoder', default=True, type=bool)
     parser.add_argument('--image_size', default=84, type=int)
@@ -150,7 +150,7 @@ def main():
     if args.seed == -1: 
         args.__dict__["seed"] = np.random.randint(1,1000000)
     utils.set_seed_everywhere(args.seed)
-    env = dmc2gym.make(
+    env = gym.make(
         domain_name=args.domain_name,
         task_name=args.task_name,
         seed=args.seed,
