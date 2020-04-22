@@ -5,7 +5,7 @@ absl-py
 pyparsing
 pillow==6.1
 termcolor
-git+git://github.com/deepmind/dm_control.git
+dm_control
 git+git://github.com/1nadequacy/dmc2gym.git
 tb-nightly
 imageio
