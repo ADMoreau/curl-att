@@ -1,6 +1,5 @@
 import imageio
 import os
-import numpy as np
 
 
 class VideoRecorder(object):
