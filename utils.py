@@ -197,10 +197,11 @@ class ReplayBuffer(Dataset):
 
 
 class FrameStack(gym.Wrapper):
-    def __init__(self, env, k):
+    def __init__(self, env, k, channels_first=True):
         gym.Wrapper.__init__(self, env)
         self._k = k
         self._frames = deque([], maxlen=k)
+        self.channels_first = channels_first
         shp = env.observation_space.shape
         self.observation_space = gym.spaces.Box(
             low=0,
@@ -213,6 +214,8 @@ class FrameStack(gym.Wrapper):
     def reset(self):
         self.env.reset()
         obs = self.env.render('rgb_array')
+        if self.channels_first:
+            obs = np.transpose(obs, (2, 0, 1))
         for _ in range(self._k):
             self._frames.append(obs)
         return self._get_obs()
@@ -220,6 +223,8 @@ class FrameStack(gym.Wrapper):
     def step(self, action):
         _, reward, done, info = self.env.step(action)
         obs = self.env.render('rgb_array')
+        if self.channels_first:
+            obs = np.transpose(obs, (2, 0, 1))
         self._frames.append(obs)
         return self._get_obs(), reward, done, info
 
