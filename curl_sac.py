@@ -46,12 +46,12 @@ class Actor(nn.Module):
     def __init__(
         self, obs_shape, action_shape, hidden_dim, encoder_type,
         encoder_feature_dim, log_std_min, log_std_max, num_layers, num_filters,
-            att_encoder_bool=False, contrast=False
+            att_encoder_bool=False
     ):
         super().__init__()
 
         if att_encoder_bool:
-            self.att_encoder = Self_Attn(obs_shape[0], contrast)
+            self.att_encoder = Self_Attn(obs_shape[0])
 
         self.encoder = make_encoder(
             encoder_type, obs_shape, encoder_feature_dim, num_layers,
@@ -139,12 +139,12 @@ class Critic(nn.Module):
     """Critic network, employes two q-functions."""
     def __init__(
         self, obs_shape, action_shape, hidden_dim, encoder_type,
-        encoder_feature_dim, num_layers, num_filters, att_encoder_bool=False, contrast=False
+        encoder_feature_dim, num_layers, num_filters, att_encoder_bool=False
     ):
         super().__init__()
 
         if att_encoder_bool:
-            self.att_encoder = Self_Attn(obs_shape[0], contrast)
+            self.att_encoder = Self_Attn(obs_shape[0])
 
         self.encoder = make_encoder(
             encoder_type, obs_shape, encoder_feature_dim, num_layers,
