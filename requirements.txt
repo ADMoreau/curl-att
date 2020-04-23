@@ -12,3 +12,5 @@ imageio
 imageio-ffmpeg
 torchvision
 scikit-image
+pyvirtualdisplay
+piglet
