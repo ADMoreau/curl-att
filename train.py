@@ -151,7 +151,7 @@ def main():
         args.__dict__["seed"] = np.random.randint(1, 1000000)
     utils.set_seed_everywhere(args.seed)
     env = gym.make(
-        domain_name=args.domain_name
+        id=args.domain_name
     )
  
     env.seed(args.seed)
