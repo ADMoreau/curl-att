@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import gym
 import os
+import cv2
 from collections import deque
 import random
 from torch.utils.data import Dataset
@@ -214,6 +215,10 @@ class FrameStack(gym.Wrapper):
     def reset(self):
         self.env.reset()
         obs = self.env.render('rgb_array')
+        #for cartpole test
+        obs = obs[200:400, 200:400, :]
+        obs = cv2.resize(obs, dsize=(50, 50),
+                         interpolation=cv2.INTER_CUBIC)
         if self.channels_first:
             obs = np.transpose(obs, (2, 0, 1))
         for _ in range(self._k):
@@ -223,6 +228,9 @@ class FrameStack(gym.Wrapper):
     def step(self, action):
         _, reward, done, info = self.env.step(action)
         obs = self.env.render('rgb_array')
+        obs = obs[200:400, 200:400, :]
+        obs = cv2.resize(obs, dsize=(50, 50),
+                         interpolation=cv2.INTER_CUBIC)
         if self.channels_first:
             obs = np.transpose(obs, (2, 0, 1))
         self._frames.append(obs)

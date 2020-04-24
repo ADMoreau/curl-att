@@ -74,7 +74,7 @@ class Actor(nn.Module):
         self, obs, compute_pi=True, compute_log_pi=True, detach_encoder=False
     ):
         if self.att_encoder is not None:
-            obs = self.att_encoder(obs)
+            obs, _ = self.att_encoder(obs)
         obs = self.encoder(obs, detach=detach_encoder)
 
         mu, log_std = self.trunk(obs).chunk(2, dim=-1)
@@ -163,7 +163,7 @@ class Critic(nn.Module):
 
     def forward(self, obs, action, detach_encoder=False):
         if self.att_encoder is not None:
-            obs = self.att_encoder(obs)
+            obs, _ = self.att_encoder(obs)
         # detach_encoder allows to stop gradient propogation to encoder
         obs = self.encoder(obs, detach=detach_encoder)
 
@@ -259,11 +259,11 @@ class CURL(nn.Module):
         if ema:
             with torch.no_grad():
                 if self.encoder_target_att is not None:
-                    x = self.encoder_target_att(x, contrast=True)
+                    x, _ = self.encoder_target_att(x, contrast=True)
                 z_out = self.encoder_target(x)
         else:
             if self.encoder_att is not None:
-                x = self.encoder_att(x)
+                x, _ = self.encoder_att(x)
             z_out = self.encoder(x)
 
         if detach:
@@ -518,7 +518,7 @@ class CurlSacAgent(object):
         
         if step % self.cpc_update_freq == 0 and self.encoder_type == 'pixel':
             obs_anchor, obs_pos = cpc_kwargs["obs_anchor"], cpc_kwargs["obs_pos"]
-            self.update_cpc(obs_anchor, obs_pos, cpc_kwargs, L, step)
+            self.update_cpc(obs_anchor, obs_pos, L, step)
 
     def save(self, model_dir, step):
         torch.save(
