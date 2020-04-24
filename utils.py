@@ -128,10 +128,10 @@ class ReplayBuffer(Dataset):
         next_obses = self.next_obses[idxs]
         pos = obses.copy()
 
-        if self.att_encoder == False:
-            obses = random_crop(obses, self.image_size)
-            next_obses = random_crop(next_obses, self.image_size)
-            pos = random_crop(pos, self.image_size)
+        #if self.att_encoder == False:
+        obses = random_crop(obses, self.image_size)
+        next_obses = random_crop(next_obses, self.image_size)
+        pos = random_crop(pos, self.image_size)
 
         obses = torch.as_tensor(obses, device=self.device).float()
         next_obses = torch.as_tensor(
@@ -217,7 +217,7 @@ class FrameStack(gym.Wrapper):
         obs = self.env.render('rgb_array')
         #for cartpole test
         obs = obs[200:400, 200:400, :]
-        obs = cv2.resize(obs, dsize=(50, 50),
+        obs = cv2.resize(obs, dsize=(75, 75),
                          interpolation=cv2.INTER_CUBIC)
         if self.channels_first:
             obs = np.transpose(obs, (2, 0, 1))
@@ -229,7 +229,7 @@ class FrameStack(gym.Wrapper):
         _, reward, done, info = self.env.step(action)
         obs = self.env.render('rgb_array')
         obs = obs[200:400, 200:400, :]
-        obs = cv2.resize(obs, dsize=(50, 50),
+        obs = cv2.resize(obs, dsize=(75, 75),
                          interpolation=cv2.INTER_CUBIC)
         if self.channels_first:
             obs = np.transpose(obs, (2, 0, 1))

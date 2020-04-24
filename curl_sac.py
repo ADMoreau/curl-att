@@ -261,7 +261,7 @@ class CURL(nn.Module):
         if ema:
             with torch.no_grad():
                 if self.encoder_target_att is not None:
-                    x, _ = self.encoder_target_att(x, contrast=True)
+                    x, _ = self.encoder_target_att(x)
                 z_out = self.encoder_target(x)
         else:
             if self.encoder_att is not None:
