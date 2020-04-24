@@ -73,6 +73,7 @@ class Actor(nn.Module):
     def forward(
         self, obs, compute_pi=True, compute_log_pi=True, detach_encoder=False
     ):
+        obs = obs / 255.
         if self.att_encoder is not None:
             obs, _ = self.att_encoder(obs)
         obs = self.encoder(obs, detach=detach_encoder)
@@ -162,6 +163,7 @@ class Critic(nn.Module):
         self.apply(weight_init)
 
     def forward(self, obs, action, detach_encoder=False):
+        obs = obs / 255.
         if self.att_encoder is not None:
             obs, _ = self.att_encoder(obs)
         # detach_encoder allows to stop gradient propogation to encoder

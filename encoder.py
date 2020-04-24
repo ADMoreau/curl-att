@@ -32,6 +32,8 @@ class PixelEncoder(nn.Module):
 
         if obs_shape[-1] == 100:
             out_dim = 43
+        elif obs_shape[-1] == 50:
+            out_dim = 18
         else:
             out_dim = OUT_DIM_64[num_layers] if obs_shape[-1] == 64 else OUT_DIM[num_layers]
         self.fc = nn.Linear(num_filters * out_dim * out_dim, self.feature_dim)
@@ -46,7 +48,7 @@ class PixelEncoder(nn.Module):
         return mu + eps * std
 
     def forward_conv(self, obs):
-        obs = obs / 255.
+        #obs = obs / 255.
         self.outputs['obs'] = obs
 
         conv = torch.relu(self.convs[0](obs))
