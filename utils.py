@@ -214,11 +214,12 @@ class FrameStack(gym.Wrapper):
 
     def reset(self):
         self.env.reset()
-        obs = self.env.render('rgb_array')
+        # change this, the cartpole environment doesn't center and must use the entire frame
+        #obs = self.env.render('rgb_array')
         #for cartpole test
-        obs = obs[200:400, 200:400, :]
-        obs = cv2.resize(obs, dsize=(75, 75),
-                         interpolation=cv2.INTER_CUBIC)
+        #obs = obs[200:400, 200:400, :]
+        #obs = cv2.resize(obs, dsize=(75, 75),
+        #                 interpolation=cv2.INTER_CUBIC)
         if self.channels_first:
             obs = np.transpose(obs, (2, 0, 1))
         for _ in range(self._k):
